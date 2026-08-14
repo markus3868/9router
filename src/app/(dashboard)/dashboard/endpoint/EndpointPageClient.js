@@ -17,37 +17,12 @@ import EndpointRow from "./components/EndpointRow";
 import StatusAlert from "./components/StatusAlert";
 import Tooltip from "./components/Tooltip";
 import SecurityWarning from "./components/SecurityWarning";
-
-const FORCED_MODEL_PROVIDER = "cx";
-
-function normalizeForcedModelValue(model) {
-  if (typeof model !== "string" || !model) return "";
-  if (!model.startsWith("codex/")) return model;
-  return `${FORCED_MODEL_PROVIDER}/${model.slice("codex/".length)}`;
-}
-
-function normalizeAvailableModels(models = []) {
-  const seen = new Set();
-  return models
-    .filter((model) => {
-      if (model?.provider !== FORCED_MODEL_PROVIDER) return false;
-      if ((model?.type || "llm") !== "llm") return false;
-      const fullModel = normalizeForcedModelValue(model?.fullModel);
-      if (!fullModel || seen.has(fullModel)) return false;
-      seen.add(fullModel);
-      return true;
-    })
-    .sort((a, b) => String(a.alias || a.fullModel).localeCompare(String(b.alias || b.fullModel)));
-}
-
-function formatModelOptionLabel(model) {
-  const fullModel = normalizeForcedModelValue(model?.fullModel);
-  if (!fullModel) return "";
-  if (model.alias && model.alias !== model.model) {
-    return `${model.alias} (${fullModel})`;
-  }
-  return fullModel;
-}
+import {
+  formatModelOptionLabel,
+  normalizeAvailableCombos,
+  normalizeAvailableModels,
+  normalizeForcedModelValue,
+} from "./forcedModelOptions";
 
 function supportsForcedModelSelection(key) {
   return ["manual", "telegram"].includes(key?.source || "manual");
@@ -66,6 +41,7 @@ function getActiveTemporaryDisableUntil(key) {
 export default function APIPageClient({ machineId, cliToken }) {
   const [keys, setKeys] = useState([]);
   const [availableModels, setAvailableModels] = useState([]);
+  const [availableCombos, setAvailableCombos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -328,13 +304,20 @@ export default function APIPageClient({ machineId, cliToken }) {
 
   const loadAvailableModels = async () => {
     try {
-      const res = await fetch("/api/models", { cache: "no-store" });
-      const data = await res.json();
-      if (res.ok) {
+      const [modelsRes, combosRes] = await Promise.all([
+        fetch("/api/models", { cache: "no-store" }),
+        fetch("/api/combos", { cache: "no-store" }),
+      ]);
+      if (modelsRes.ok) {
+        const data = await modelsRes.json();
         setAvailableModels(normalizeAvailableModels(data.models || []));
       }
+      if (combosRes.ok) {
+        const data = await combosRes.json();
+        setAvailableCombos(normalizeAvailableCombos(data.combos || []));
+      }
     } catch (error) {
-      console.log("Error fetching models:", error);
+      console.log("Error fetching forced model options:", error);
     } finally {
       setModelsLoading(false);
     }
@@ -1180,14 +1163,25 @@ export default function APIPageClient({ machineId, cliToken }) {
                         style={{ colorScheme: "auto" }}
                       >
                         <option value="">Client requested model</option>
-                        {key.forcedModel && !availableModels.some((model) => normalizeForcedModelValue(model.fullModel) === normalizeForcedModelValue(key.forcedModel)) && (
+                        {key.forcedModel && ![...availableModels, ...availableCombos].some((model) => normalizeForcedModelValue(model.fullModel) === normalizeForcedModelValue(key.forcedModel)) && (
                           <option value={normalizeForcedModelValue(key.forcedModel)}>{`${normalizeForcedModelValue(key.forcedModel)} (Unavailable)`}</option>
                         )}
-                        {availableModels.map((model) => (
-                          <option key={model.fullModel} value={normalizeForcedModelValue(model.fullModel)}>
-                            {formatModelOptionLabel(model)}
-                          </option>
-                        ))}
+                        <optgroup label="Models">
+                          {availableModels.map((model) => (
+                            <option key={model.fullModel} value={normalizeForcedModelValue(model.fullModel)}>
+                              {formatModelOptionLabel(model)}
+                            </option>
+                          ))}
+                        </optgroup>
+                        {availableCombos.length > 0 && (
+                          <optgroup label="Combos">
+                            {availableCombos.map((combo) => (
+                              <option key={combo.fullModel} value={combo.fullModel}>
+                                {combo.fullModel}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                       {savingForcedModelIds.has(key.id) && (
                         <span className="material-symbols-outlined animate-spin text-[14px] text-text-muted">progress_activity</span>
