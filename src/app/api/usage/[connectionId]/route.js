@@ -13,7 +13,8 @@ export async function GET(request, { params }) {
 
   try {
     ({ connectionId } = await params);
-    const usage = await fetchUsageForConnection(connectionId);
+    const force = new URL(request.url).searchParams.get("force") === "1";
+    const usage = await fetchUsageForConnection(connectionId, { force });
     return Response.json(usage);
   } catch (error) {
     const status = error?.status || 500;

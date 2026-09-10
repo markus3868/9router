@@ -96,7 +96,7 @@ export async function refreshAndUpdateCredentials(connection, force = false, pro
   };
 }
 
-export async function fetchUsageForConnection(connectionInput) {
+export async function fetchUsageForConnection(connectionInput, options = {}) {
   let connection = connectionInput;
   if (typeof connectionInput === "string") {
     connection = await getProviderConnectionById(connectionInput);
@@ -126,12 +126,12 @@ export async function fetchUsageForConnection(connectionInput) {
     }
   }
 
-  let usage = await getUsageForProvider(connection, proxyOptions);
+  let usage = await getUsageForProvider(connection, proxyOptions, options);
   if (isOAuth && isAuthExpiredMessage(usage) && connection.refreshToken) {
     try {
       const retryResult = await refreshAndUpdateCredentials(connection, true, proxyOptions);
       connection = retryResult.connection;
-      usage = await getUsageForProvider(connection, proxyOptions);
+      usage = await getUsageForProvider(connection, proxyOptions, options);
     } catch (retryError) {
       console.warn(`[Usage] ${connection.provider}: force refresh failed: ${retryError.message}`);
     }

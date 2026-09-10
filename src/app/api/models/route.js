@@ -11,10 +11,15 @@ export async function GET() {
     const modelAliases = await getModelAliases();
     const disabled = await getDisabledModels();
     const customModels = await getCustomModels();
-    const aliasByFullModel = Object.fromEntries(
-      Object.entries(modelAliases).filter(([, fullModel]) => typeof fullModel === "string")
-        .map(([alias, fullModel]) => [fullModel, alias])
-    );
+    const aliasByFullModel = {};
+    for (const [alias, fullModel] of Object.entries(modelAliases)) {
+      if (typeof fullModel !== "string") continue;
+      const separatorIndex = fullModel.indexOf("/");
+      if (separatorIndex <= 0 || separatorIndex === fullModel.length - 1) continue;
+      const provider = fullModel.slice(0, separatorIndex);
+      const model = fullModel.slice(separatorIndex + 1);
+      aliasByFullModel[`${getProviderAlias(provider) || provider}/${model}`] = alias;
+    }
 
     const isModelDisabled = (providerAlias, providerId, modelId) => {
       const aliasList = disabled[providerAlias] || [];
@@ -23,7 +28,7 @@ export async function GET() {
     };
 
     const modelsByFullModel = new Map();
-    const addModel = ({ provider, model, name, type = "llm" }) => {
+    const addModel = ({ provider, model, name, type = "llm", caps = null }) => {
       const rawProvider = String(provider || "").trim();
       const modelId = String(model || "").trim();
       if (!rawProvider || !modelId) return;
@@ -37,6 +42,7 @@ export async function GET() {
       const capabilities = {
         ...getCapabilitiesForModel(providerAlias, modelId),
         ...(capabilitiesFromServiceKind(type) || {}),
+        ...(caps || {}),
       };
 
       modelsByFullModel.set(fullModel, {
@@ -45,11 +51,14 @@ export async function GET() {
         name: name || modelId,
         type,
         fullModel,
+        routedModel: fullModel,
         alias: aliasByFullModel[fullModel] || modelId,
         caps: {
           vision: capabilities.vision,
           search: capabilities.search,
           reasoning: capabilities.reasoning,
+          contextWindow: capabilities.contextWindow,
+          maxOutput: capabilities.maxOutput,
         },
       });
     };
@@ -63,7 +72,8 @@ export async function GET() {
         provider: customModel?.providerAlias,
         model: customModel?.id,
         name: customModel?.name,
-        type: customModel?.type || "llm",
+        type: customModel?.kind || customModel?.type || "llm",
+        caps: customModel?.caps,
       });
     }
 
