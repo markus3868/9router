@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   },
   requireLogin: true,
   requireApiKey: true,
+  telegramWorkingHoursEnabled: true,
   tunnelDashboardAccess: true,
   authMode: "password",
   ssoType: "oidc",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSettings, updateSettings } from "@/lib/localDb";
+import { getSettings, updateSettings, reconcileTelegramApiKeySchedule } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
 import bcrypt from "bcryptjs";
@@ -106,6 +106,10 @@ export async function PATCH(request) {
           configureQuotaAutoPing(settings);
         })
         .catch((error) => console.warn("[AutoPing] settings update failed:", error.message));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "telegramWorkingHoursEnabled")) {
+      await reconcileTelegramApiKeySchedule();
     }
 
     const { password, oidcClientSecret, ...safeSettings } = settings;

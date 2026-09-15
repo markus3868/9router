@@ -76,22 +76,23 @@ export function isVietnamBusinessHours(now = new Date()) {
   return totalMinutes >= ACTIVE_START_MINUTES && totalMinutes < ACTIVE_END_MINUTES;
 }
 
-export function isScheduleActive(scheduleMode, now = new Date()) {
+export function isScheduleActive(scheduleMode, now = new Date(), options = {}) {
   if (!scheduleMode || scheduleMode === API_KEY_SCHEDULE_MODES.NONE) return true;
   if (scheduleMode === API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS) {
+    if (options.workingHoursEnabled === false) return true;
     return isVietnamBusinessHours(now);
   }
   return true;
 }
 
-export function computeApiKeyIsActive(apiKey, now = new Date()) {
+export function computeApiKeyIsActive(apiKey, now = new Date(), options = {}) {
   const manualDisabled = apiKey?.manualDisabled === true;
   if (manualDisabled) return false;
   if (apiKey?.temporaryDisabledUntil) {
     const disabledUntilMs = new Date(apiKey.temporaryDisabledUntil).getTime();
     if (Number.isFinite(disabledUntilMs) && now.getTime() < disabledUntilMs) return false;
   }
-  return isScheduleActive(apiKey?.scheduleMode, now);
+  return isScheduleActive(apiKey?.scheduleMode, now, options);
 }
 
 export function getNextVietnamScheduleTransition(now = new Date()) {

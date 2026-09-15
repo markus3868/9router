@@ -28,6 +28,27 @@ describe("API key schedule", () => {
     expect(isVietnamBusinessHours(new Date("2026-05-24T08:00:00.000Z"))).toBe(false);
   });
 
+  it("bypasses working-hour schedule when the feature is disabled", () => {
+    const key = {
+      scheduleMode: API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS,
+    };
+    expect(computeApiKeyIsActive(key, new Date("2026-05-23T03:00:00.000Z"), {
+      workingHoursEnabled: false,
+    })).toBe(true);
+  });
+
+  it("keeps manual and temporary disables effective when working hours are disabled", () => {
+    const now = new Date("2026-05-23T03:00:00.000Z");
+    expect(computeApiKeyIsActive({
+      scheduleMode: API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS,
+      manualDisabled: true,
+    }, now, { workingHoursEnabled: false })).toBe(false);
+    expect(computeApiKeyIsActive({
+      scheduleMode: API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS,
+      temporaryDisabledUntil: "2026-05-24T00:00:00.000Z",
+    }, now, { workingHoursEnabled: false })).toBe(false);
+  });
+
   it("lets manual disable override schedule", () => {
     const key = {
       scheduleMode: API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS,

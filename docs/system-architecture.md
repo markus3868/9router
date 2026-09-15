@@ -1,6 +1,6 @@
 # System Architecture
 
-_Last updated: 2026-05-22_
+_Last updated: 2026-09-15_
 
 ## Summary
 
@@ -62,6 +62,7 @@ This layer handles:
 - `src/mitm/*` manages MITM server, certs, and DNS hooks
 - `src/lib/network/*` handles outbound proxy support and connectivity helpers
 - `src/lib/telegram/*` handles Telegram polling, `/key`, `/report`, `/report7`, native command-menu sync, Telegram-specific quota/usage reports, daily usage limit notifications, and manual dashboard warning/temporary-disable/resume actions. Manual resume stores a current-day KV limit override so the next request is not disabled again by already-exceeded totals.
+- `settings.telegramWorkingHoursEnabled` is the global switch for Telegram API-key working-hour enforcement; API-key validation and schedule reconciliation read it directly.
 
 ## Key Architectural Decisions
 

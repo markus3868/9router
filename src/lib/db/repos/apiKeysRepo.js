@@ -6,6 +6,7 @@ import {
   computeApiKeyIsActive,
 } from "@/lib/apiKeys/schedule.js";
 import { generateApiKeyWithMachine } from "@/shared/utils/apiKey.js";
+import { getSettings } from "./settingsRepo.js";
 
 function boolFromDb(value) {
   return value === 1 || value === true;
@@ -30,7 +31,7 @@ function rowToKey(row) {
   };
 }
 
-function normalizeKeyRecord(data, now = new Date()) {
+function normalizeKeyRecord(data, now = new Date(), options = {}) {
   const nowIso = now.toISOString();
   const normalized = {
     id: data.id,
@@ -50,7 +51,7 @@ function normalizeKeyRecord(data, now = new Date()) {
     createdAt: data.createdAt || nowIso,
     updatedAt: nowIso,
   };
-  normalized.isActive = computeApiKeyIsActive(normalized, now);
+  normalized.isActive = computeApiKeyIsActive(normalized, now, options);
   return normalized;
 }
 
@@ -148,6 +149,10 @@ export async function upsertTelegramApiKey({ telegramUserId, username, machineId
   if (!machineId) throw new Error("machineId is required");
 
   const db = await getAdapter();
+  const settings = await getSettings();
+  const scheduleOptions = {
+    workingHoursEnabled: settings.telegramWorkingHoursEnabled !== false,
+  };
   let result = null;
 
   db.transaction(() => {
@@ -159,7 +164,7 @@ export async function upsertTelegramApiKey({ telegramUserId, username, machineId
         telegramUserId: String(telegramUserId),
         scheduleMode: API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS,
       });
-      result = normalizeKeyRecord(merged, now);
+      result = normalizeKeyRecord(merged, now, scheduleOptions);
       persistKey(db, result);
       return;
     }
@@ -175,7 +180,7 @@ export async function upsertTelegramApiKey({ telegramUserId, username, machineId
       scheduleMode: API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS,
       manualDisabled: false,
       createdAt: now.toISOString(),
-    }, now);
+    }, now, scheduleOptions);
     persistKey(db, result);
   });
 
@@ -186,12 +191,16 @@ export async function updateApiKey(id, data) {
   const db = await getAdapter();
   let result = null;
   const now = data?.now instanceof Date ? data.now : new Date();
+  const settings = await getSettings();
+  const scheduleOptions = {
+    workingHoursEnabled: settings.telegramWorkingHoursEnabled !== false,
+  };
 
   db.transaction(() => {
     const row = db.get(`SELECT * FROM apiKeys WHERE id = ?`, [id]);
     if (!row) return;
     const merged = normalizePatch(rowToKey(row), data);
-    result = normalizeKeyRecord(merged, now);
+    result = normalizeKeyRecord(merged, now, scheduleOptions);
     persistKey(db, result);
   });
 
@@ -206,6 +215,10 @@ export async function deleteApiKey(id) {
 
 export async function reconcileTelegramApiKeySchedule(now = new Date()) {
   const db = await getAdapter();
+  const settings = await getSettings();
+  const scheduleOptions = {
+    workingHoursEnabled: settings.telegramWorkingHoursEnabled !== false,
+  };
   const rows = db.all(
     `SELECT * FROM apiKeys WHERE scheduleMode = ?`,
     [API_KEY_SCHEDULE_MODES.VN_BUSINESS_HOURS]
@@ -213,7 +226,7 @@ export async function reconcileTelegramApiKeySchedule(now = new Date()) {
 
   const changes = rows.flatMap((row) => {
     const key = rowToKey(row);
-    const desired = computeApiKeyIsActive(key, now);
+    const desired = computeApiKeyIsActive(key, now, scheduleOptions);
     if (desired === key.isActive) return [];
     return [{ ...key, isActive: desired, updatedAt: now.toISOString() }];
   });
@@ -243,7 +256,10 @@ export async function resolveValidatedApiKey(key) {
 
   const normalized = rowToKey(row);
   const now = new Date();
-  const desired = computeApiKeyIsActive(normalized, now);
+  const settings = await getSettings();
+  const desired = computeApiKeyIsActive(normalized, now, {
+    workingHoursEnabled: settings.telegramWorkingHoursEnabled !== false,
+  });
   if (desired !== normalized.isActive) {
     db.run(`UPDATE apiKeys SET isActive = ?, updatedAt = ? WHERE id = ?`, [
       desired ? 1 : 0,

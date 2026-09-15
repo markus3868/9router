@@ -52,6 +52,8 @@ export default function APIPageClient({ machineId, cliToken }) {
   const [telegramActionIds, setTelegramActionIds] = useState(new Set());
 
   const [requireApiKey, setRequireApiKey] = useState(false);
+  const [telegramWorkingHoursEnabled, setTelegramWorkingHoursEnabled] = useState(true);
+  const [telegramWorkingHoursSaving, setTelegramWorkingHoursSaving] = useState(false);
   const [requireLogin, setRequireLogin] = useState(true);
   const [hasPassword, setHasPassword] = useState(true);
  const [tunnelDashboardAccess, setTunnelDashboardAccess] = useState(false);
@@ -236,6 +238,7 @@ export default function APIPageClient({ machineId, cliToken }) {
       if (settingsRes.ok) {
         const data = await settingsRes.json();
         setRequireApiKey(data.requireApiKey || false);
+        setTelegramWorkingHoursEnabled(data.telegramWorkingHoursEnabled !== false);
         setRequireLogin(data.requireLogin !== false);
         setHasPassword(data.hasPassword || false);
         setTunnelDashboardAccess(data.tunnelDashboardAccess || false);
@@ -285,6 +288,24 @@ export default function APIPageClient({ machineId, cliToken }) {
       if (res.ok) setRequireApiKey(value);
     } catch (error) {
       console.log("Error updating requireApiKey:", error);
+    }
+  };
+
+  const handleTelegramWorkingHours = async (value) => {
+    setTelegramWorkingHoursSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegramWorkingHoursEnabled: value }),
+      });
+      if (!res.ok) throw new Error("Failed to update Telegram working hours");
+      setTelegramWorkingHoursEnabled(value);
+      await fetchData();
+    } catch (error) {
+      console.log("Error updating Telegram working hours:", error);
+    } finally {
+      setTelegramWorkingHoursSaving(false);
     }
   };
 
@@ -1109,6 +1130,20 @@ export default function APIPageClient({ machineId, cliToken }) {
           <Toggle
             checked={requireApiKey}
             onChange={() => handleRequireApiKey(!requireApiKey)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-border">
+          <div>
+            <p className="font-medium">Enable Use Working Hour</p>
+            <p className="text-sm text-text-muted">
+              Telegram API keys work only Monday-Friday, 08:00-18:30 Vietnam time when enabled
+            </p>
+          </div>
+          <Toggle
+            checked={telegramWorkingHoursEnabled}
+            onChange={() => handleTelegramWorkingHours(!telegramWorkingHoursEnabled)}
+            disabled={telegramWorkingHoursSaving}
           />
         </div>
 

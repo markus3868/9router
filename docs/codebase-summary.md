@@ -1,6 +1,6 @@
 # Codebase Summary
 
-_Last updated: 2026-05-22_
+_Last updated: 2026-09-15_
 
 ## Stack
 
@@ -66,4 +66,5 @@ _Last updated: 2026-05-22_
 - Provider metadata is centralized in `src/shared/constants/providers.js`
 - The provider catalog spans LLM, embeddings, image, TTS, STT, web search, web fetch, and video-related flows
 - Runtime bootstrap auto-resumes tunnel, Tailscale, and MITM services when settings require it
+- Telegram-managed API-key scheduling is controlled globally by `settings.telegramWorkingHoursEnabled`; the Endpoint page exposes the `Enable Use Working Hour` switch
 - There is a deeper technical reference in `docs/ARCHITECTURE.md`
