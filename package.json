@@ -1,6 +1,6 @@
 {
   "name": "@smt/9router",
-  "version": "0.5.69",
+  "version": "0.5.95",
   "description": "9Router web dashboard",
   "private": false,
   "bin": {

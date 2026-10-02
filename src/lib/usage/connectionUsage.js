@@ -2,6 +2,7 @@ import { getProviderConnectionById, updateProviderConnection } from "@/lib/local
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { USAGE_APIKEY_PROVIDERS, USAGE_SUPPORTED_PROVIDERS } from "@/shared/constants/providers";
 import { getUsageForProvider } from "open-sse/services/usage.js";
+import { isUnrecoverableRefreshError } from "open-sse/services/tokenRefresh.js";
 import { getExecutor } from "open-sse/executors/index.js";
 
 const AUTH_EXPIRED_PATTERNS = ["expired", "authentication", "unauthorized", "401", "re-authorize"];
@@ -33,6 +34,10 @@ export async function getConnectionUsageProxyOptions(connection) {
 }
 
 export async function refreshAndUpdateCredentials(connection, force = false, proxyOptions = null) {
+  // Refresh with the latest rotated token, not a stale quota snapshot.
+  const latest = connection.id ? await getProviderConnectionById(connection.id) : null;
+  if (latest) connection = latest;
+
   const executor = getExecutor(connection.provider);
   const credentials = {
     accessToken: connection.accessToken,
@@ -52,6 +57,9 @@ export async function refreshAndUpdateCredentials(connection, force = false, pro
   }
 
   const refreshResult = await executor.refreshCredentials(credentials, console, proxyOptions);
+  if (refreshResult && isUnrecoverableRefreshError(refreshResult)) {
+    throw new Error("Refresh token invalid or reused. Please re-authorize the connection.");
+  }
   if (!refreshResult) {
     if (connection.accessToken) {
       return { connection, refreshed: false };

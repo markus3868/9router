@@ -1,6 +1,6 @@
 # Deployment Guide
 
-_Last updated: 2026-09-15_
+_Last updated: 2026-10-02_
 
 ## Runtime Summary
 
@@ -70,8 +70,9 @@ npm start
 
 Notes:
 
-- `npm start` boots the Next standalone server through `scripts/start-standalone.js`
-- The start wrapper syncs `.next/static` and `public/` into `.next/standalone/` first, preventing missing CSS/JS/font assets on source-based deployments
+- `PORT=20128 npm start` boots the custom Next server from the source checkout; without `PORT`, the package start script defaults to `20127`.
+- `npm run build` copies `.next/static`, `public/`, and the custom server into `.next/standalone/`.
+- Existing local LaunchAgent deployments can keep using `scripts/start-standalone.js`, which syncs assets before startup. Local Telegram remains disabled; the server keeps its own Telegram environment.
 
 ## Systemd Example
 
