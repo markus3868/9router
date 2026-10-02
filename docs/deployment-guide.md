@@ -140,6 +140,7 @@ Notes:
 - `/report` and `/report7` show `Quota Remaining Today` for weekly quotas as the current workday burn budget remaining after excluding future weekend days; a fixed `10%` safety buffer is deducted silently
 - On Saturday and Sunday in Vietnam time, `/key`, `/report`, and `/report7` reply with a short weekend rest greeting instead of returning a key or report
 - In Endpoint settings, API keys can optionally force a single model from the current Available Models list; when set, client-supplied model names are ignored for model-based API routes except `/v1/images/generations`, which preserves the image-capable model selected by the media client
+- Provider thinking settings are defaults only: explicit client reasoning (including Responses `reasoning.effort`) takes priority. Codex normalizes unsupported efforts to the target model's supported levels; forcing an API key's model does not change the client's advertised effort options.
 - `/key` still requires the sender to have a Telegram `username`; `/report` and `/report7` do not
 - Telegram clients that support bot command menus will show `/key`, `/report`, and `/report7` from the native slash-command menu
 

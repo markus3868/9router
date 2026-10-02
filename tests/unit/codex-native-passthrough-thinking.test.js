@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CodexExecutor } from "../../open-sse/executors/codex.js";
+import { fmtThink } from "../../src/sse/utils/logger.js";
 
-const { executeMock, forcedSSEToJsonMock } = vi.hoisted(() => ({
+const { executeMock, forcedSSEToJsonMock, lineMock } = vi.hoisted(() => ({
   executeMock: vi.fn(),
   forcedSSEToJsonMock: vi.fn(),
+  lineMock: vi.fn(),
 }));
 
 vi.mock("../../open-sse/executors/index.js", () => ({
@@ -35,7 +38,7 @@ vi.mock("../../open-sse/handlers/chatCore/sseToJsonHandler.js", () => ({
 
 const { handleChatCore } = await import("../../open-sse/handlers/chatCore.js");
 
-async function runNativeCodexRequest(model, reasoning) {
+async function runNativeCodexRequest(model, reasoning, providerThinking = null) {
   const body = {
     model,
     input: "hello",
@@ -47,7 +50,7 @@ async function runNativeCodexRequest(model, reasoning) {
     body,
     modelInfo: { provider: "codex", model },
     credentials: { accessToken: "test-token", providerSpecificData: {} },
-    log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+    log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), line: lineMock, fmtThink },
     connectionId: "test-connection",
     rtkEnabled: false,
     headroomEnabled: false,
@@ -55,6 +58,7 @@ async function runNativeCodexRequest(model, reasoning) {
     ponytailEnabled: false,
     pxpipeEnabled: false,
     sourceFormatOverride: "openai-responses",
+    providerThinking,
     clientRawRequest: {
       endpoint: "/v1/responses",
       body,
@@ -107,5 +111,29 @@ describe("native Codex passthrough thinking suffixes", () => {
 
     expect(body.model).toBe("gpt-5.6-terra");
     expect(body.reasoning).toEqual({ effort: "ultra" });
+  });
+
+  it.each(["low", "medium", "high", "xhigh", "max"])(
+    "preserves Responses client effort %s over a provider-level default",
+    async (effort) => {
+      const body = await runNativeCodexRequest(
+        "gpt-6.1-sol",
+        { effort, summary: "detailed" },
+        { mode: "max" },
+      );
+
+      expect(body.reasoning).toEqual({ effort, summary: "detailed" });
+      expect(body.reasoning_effort).toBeUndefined();
+      expect(lineMock.mock.calls[0][2]).toContain(`THINK:${effort}`);
+
+      const outbound = new CodexExecutor().transformRequest("gpt-6.1-sol", body, true, {});
+      expect(outbound.reasoning.effort).toBe(effort);
+    },
+  );
+
+  it("keeps provider thinking as the default when no client effort is supplied", async () => {
+    const body = await runNativeCodexRequest("gpt-6.1-sol", undefined, { mode: "max" });
+    const outbound = new CodexExecutor().transformRequest("gpt-6.1-sol", body, true, {});
+    expect(outbound.reasoning.effort).toBe("max");
   });
 });

@@ -103,9 +103,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const stripList = getModelStrip(alias, model);
   const upstreamModel = getModelUpstreamId(alias, model);
 
-  // Inject provider-level thinking config override (only if client hasn't set)
+  // Provider thinking is a default; Responses clients send reasoning.effort.
   // on/off → extended type (body.thinking), none/low/medium/high → effort type (body.reasoning_effort)
-  if (providerThinking?.mode && providerThinking.mode !== "auto") {
+  if (providerThinking?.mode && providerThinking.mode !== "auto" && !extractThinking(body)) {
     const mode = providerThinking.mode;
     if (mode === "on" && !body.thinking) {
       console.log("Injecting provider-level thinking config override: on");
