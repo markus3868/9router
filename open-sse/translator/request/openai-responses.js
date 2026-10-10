@@ -445,6 +445,14 @@ export function openaiToOpenAIResponsesRequest(model, body, stream, credentials)
   }
 
   // Pass through other relevant fields
+  if (body.tool_choice !== undefined) {
+    const choice = body.tool_choice;
+    const name = choice?.function?.name ?? choice?.name;
+    result.tool_choice = choice?.type === OPENAI_BLOCK.FUNCTION && typeof name === "string"
+      ? { type: OPENAI_BLOCK.FUNCTION, name: name.trim().slice(0, MAX_TOOL_NAME_LEN) }
+      : choice;
+  }
+  if (typeof body.parallel_tool_calls === "boolean") result.parallel_tool_calls = body.parallel_tool_calls;
   if (body.temperature !== undefined) result.temperature = body.temperature;
   if (body.max_output_tokens !== undefined) {
     result.max_output_tokens = body.max_output_tokens;

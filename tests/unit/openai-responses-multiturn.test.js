@@ -10,6 +10,38 @@ import {
 import { GrokCliExecutor, _resetGrokCliTurnStore } from "../../open-sse/executors/grok-cli.js";
 import { translateRequest } from "../../open-sse/translator/index.js";
 
+describe("openai → responses tool selection", () => {
+  it.each([
+    ["auto", "auto"],
+    ["none", "none"],
+    ["required", "required"],
+    [{ type: "function", function: { name: " probe " } }, { type: "function", name: "probe" }],
+    [{ type: "function", name: "probe" }, { type: "function", name: "probe" }],
+    [{ type: "function", function: { name: "x".repeat(140) } }, { type: "function", name: "x".repeat(128) }],
+  ])("preserves tool_choice %j", (choice, expected) => {
+    const body = { messages: [{ role: "user", content: "hi" }], tool_choice: choice };
+    expect(openaiToOpenAIResponsesRequest("m", body, false, {}).tool_choice).toEqual(expected);
+  });
+
+  it.each([true, false])("preserves parallel_tool_calls=%s", (parallel_tool_calls) => {
+    const body = { messages: [{ role: "user", content: "hi" }], parallel_tool_calls };
+    expect(openaiToOpenAIResponsesRequest("m", body, false, {}).parallel_tool_calls).toBe(parallel_tool_calls);
+  });
+
+  it("preserves selection on a native Responses body", () => {
+    const body = { input: "hi", tool_choice: { type: "function", name: "probe" }, parallel_tool_calls: false };
+    const out = openaiToOpenAIResponsesRequest("m", body, false, {});
+    expect(out.tool_choice).toEqual(body.tool_choice);
+    expect(out.parallel_tool_calls).toBe(false);
+  });
+
+  it("does not invent omitted tool selection fields", () => {
+    const out = openaiToOpenAIResponsesRequest("m", { messages: [] }, false, {});
+    expect(out).not.toHaveProperty("tool_choice");
+    expect(out).not.toHaveProperty("parallel_tool_calls");
+  });
+});
+
 describe("openai ↔ responses multi-turn reasoning", () => {
   it("openai→responses re-emits reasoning item with summary + encrypted_content", () => {
     const body = {
