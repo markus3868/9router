@@ -20,6 +20,30 @@ function normalizeTools(tools) {
 }
 
 describe("CodexExecutor tool normalization", () => {
+  it.each([true, false])("preserves nested and flat function strict=%s", (strict) => {
+    const fields = { name: "probe", description: "Probe", parameters: { type: "object", properties: {} }, strict };
+    const tools = normalizeTools([
+      { type: "function", function: { ...fields } },
+      { type: "function", ...fields },
+    ]);
+
+    expect(tools).toEqual([{ type: "function", ...fields }, { type: "function", ...fields }]);
+  });
+
+  it.each([undefined, null, "true", 0])("omits non-boolean function strict=%s", (strict) => {
+    const fields = { name: "probe", parameters: { type: "object", properties: {} }, strict };
+    const tools = normalizeTools([
+      { type: "function", function: { ...fields } },
+      { type: "function", ...fields },
+    ]);
+
+    expect(tools.every((tool) => !Object.hasOwn(tool, "strict"))).toBe(true);
+  });
+
+  it("prefers top-level strict=false over nested strict=true", () => {
+    expect(normalizeTools([{ type: "function", strict: false, function: { name: "probe", strict: true } }])[0].strict).toBe(false);
+  });
+
   it("preserves Responses text.format for structured outputs", () => {
     const executor = new CodexExecutor();
     const schema = {
