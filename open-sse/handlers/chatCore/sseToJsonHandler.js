@@ -1,4 +1,4 @@
-import { convertResponsesStreamToJson } from "../../transformer/streamToJsonConverter.js";
+import { convertResponsesStreamToJson, isReceiptIdentity } from "../../transformer/streamToJsonConverter.js";
 import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
 import { createErrorResult } from "../../utils/error.js";
 import { HTTP_STATUS } from "../../config/runtimeConfig.js";
@@ -200,7 +200,17 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
   const isCodexResponsesApi = isResponsesProvider(provider) || targetFormat === FORMATS.OPENAI_RESPONSES;
   if (isCodexResponsesApi) {
     try {
-      const jsonResponse = await convertResponsesStreamToJson(providerResponse.body);
+      const jsonResponse = await convertResponsesStreamToJson(providerResponse.body, apiKey);
+      if (jsonResponse.status !== "completed" && jsonResponse.status !== "done") {
+        return createErrorResult(HTTP_STATUS.BAD_GATEWAY,
+          jsonResponse.error?.message || `Upstream response ${jsonResponse.status || "incomplete"}`);
+      }
+      const responseHeaders = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };
+      if (providerResponse.ok && jsonResponse.model && isReceiptIdentity(provider, apiKey)) {
+        // ponytail: gateway transport declaration only; require upstream attestation for backend/weights identity.
+        responseHeaders["x-resolved-model"] = jsonResponse.model;
+        responseHeaders["x-resolved-provider"] = provider;
+      }
       if (onRequestSuccess) await onRequestSuccess();
 
       const usage = jsonResponse.usage || {};
@@ -226,7 +236,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
 
       // Client is Responses API → return as-is
       if (sourceFormat === FORMATS.OPENAI_RESPONSES) {
-        return { success: true, response: new Response(JSON.stringify(restoreToolNames(jsonResponse, toolNameMap)), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
+        return { success: true, response: new Response(JSON.stringify(restoreToolNames(jsonResponse, toolNameMap)), { headers: responseHeaders }) };
       }
 
       // Build client-format response.
@@ -282,7 +292,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
         };
       }
 
-      return { success: true, response: new Response(JSON.stringify(restoreToolNames(finalResp, toolNameMap)), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
+      return { success: true, response: new Response(JSON.stringify(restoreToolNames(finalResp, toolNameMap)), { headers: responseHeaders }) };
     } catch (err) {
       console.error("[ChatCore] Responses API SSE→JSON failed:", err);
       return createErrorResult(HTTP_STATUS.BAD_GATEWAY, "Failed to convert streaming response to JSON");
