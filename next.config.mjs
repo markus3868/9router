@@ -7,7 +7,6 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
 const tracingRoot = process.env.NEXT_TRACING_ROOT_MODE === "workspace"
   ? join(projectRoot, "..")
   : projectRoot;
-const proxyClientMaxBodySize = process.env.NINEROUTER_PROXY_CLIENT_MAX_BODY_SIZE || "128mb";
 
 const DEFAULT_PROXY_CLIENT_MAX_BODY_SIZE = 500 * 1024 * 1024;
 
@@ -32,7 +31,12 @@ const nextConfig = {
   // letter). That throw happens at module scope, so every consumer of `open` dies on
   // import — including xAI/Grok token refresh, which loads the OAuth service that imports
   // it. Keeping it external preserves the real `import.meta.url` at runtime.
-  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "open"],
+  // @aws-sdk/credential-providers must stay external for the same class of reason: it reads
+  // ~/.aws/config and the SSO token cache from disk at runtime and resolves its credential
+  // plugins by dynamic require, neither of which survives bundling.
+  // wreq-js resolves its rust native binding by relative require paths from its own
+  // package dir — bundling breaks those paths ("Failed to load native module").
+  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "open", "@aws-sdk/credential-providers", "wreq-js"],
   turbopack: {
     root: tracingRoot
   },
@@ -43,15 +47,10 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
-  experimental: {
-    // Codex/Responses payloads can include inline base64 image data and exceed
-    // Next.js's default 10 MB proxy buffering limit, which truncates the body.
-    proxyClientMaxBodySize: resolveProxyClientMaxBodySize(),
-  },
   env: {},
   experimental: {
     // #1529/#1572: LLM clients can send long context or base64 image payloads through /v1 rewrites.
-    proxyClientMaxBodySize,
+    proxyClientMaxBodySize: process.env.NINEROUTER_PROXY_CLIENT_MAX_BODY_SIZE || resolveProxyClientMaxBodySize(),
     // Cache fetch responses across HMR refreshes for faster dev reloads.
     serverComponentsHmrCache: true,
     // Tree-shake heavy barrel imports to cut compile + bundle size

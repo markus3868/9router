@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getCustomModels, getModelAliases, setModelAlias } from "@/models";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { AI_MODELS } from "@/shared/constants/config";
-import { getProviderAlias } from "@/shared/constants/providers";
-import { capabilitiesFromServiceKind, getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { getProviderAlias, ALIAS_TO_ID } from "@/shared/constants/providers";
+import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
 
 // GET /api/models - Get models with aliases
 export async function GET() {
@@ -34,25 +34,27 @@ export async function GET() {
       if (!rawProvider || !modelId) return;
 
       const providerAlias = getProviderAlias(rawProvider) || rawProvider;
+      const providerId = ALIAS_TO_ID[providerAlias] || rawProvider;
       if (type !== "llm") return;
-      if (isModelDisabled(providerAlias, rawProvider, modelId)) return;
+      if (isModelDisabled(providerAlias, providerId, modelId)) return;
 
-      const fullModel = `${providerAlias}/${modelId}`;
-      if (modelsByFullModel.has(fullModel)) return;
+      const fullModel = `${rawProvider}/${modelId}`;
+      const routedModel = `${providerAlias}/${modelId}`;
+      // Registry entries win over custom shadows routing to the same model.
+      if (modelsByFullModel.has(routedModel)) return;
       const capabilities = {
-        ...getCapabilitiesForModel(providerAlias, modelId),
-        ...(capabilitiesFromServiceKind(type) || {}),
+        ...getCapabilitiesForModel(providerId, modelId),
         ...(caps || {}),
       };
 
-      modelsByFullModel.set(fullModel, {
-        provider: providerAlias,
+      modelsByFullModel.set(routedModel, {
+        provider: rawProvider,
         model: modelId,
         name: name || modelId,
         type,
         fullModel,
-        routedModel: fullModel,
-        alias: aliasByFullModel[fullModel] || modelId,
+        routedModel,
+        alias: aliasByFullModel[routedModel] || modelId,
         caps: {
           vision: capabilities.vision,
           search: capabilities.search,

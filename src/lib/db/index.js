@@ -1,6 +1,8 @@
 // Public API barrel — all DB functions
 import { getAdapter } from "./driver.js";
 import { stringifyJson, parseJson } from "./helpers/jsonCol.js";
+import { keyAccessFromColumns, keyAccessToColumns, validateKeyAccessInput } from "@/shared/utils/keyAccess.js";
+import { KEY_ACCESS_UNRESTRICTED } from "@/shared/constants/keyAccess.js";
 
 // Settings
 export {
@@ -94,6 +96,7 @@ export async function exportDb() {
       forcedModel: r.forcedModel || null,
       temporaryDisabledUntil: r.temporaryDisabledUntil || null,
       createdAt: r.createdAt,
+      access: keyAccessFromColumns(r.accessRestricted, r.accessAllow),
     })),
     combos: db.all(`SELECT * FROM combos`).map((r) => ({ id: r.id, name: r.name, kind: r.kind, models: parseJson(r.models, []), createdAt: r.createdAt, updatedAt: r.updatedAt })),
     modelAliases: {},
@@ -153,9 +156,18 @@ export async function importDb(payload) {
       );
     }
     for (const k of payload.apiKeys || []) {
+      // Per-key access: a backup without `access` (older version) restores
+      // unrestricted, exactly as before; a malformed `access` is refused.
+      let access = KEY_ACCESS_UNRESTRICTED;
+      if (k.access !== undefined) {
+        const checked = validateKeyAccessInput(k.access);
+        if (!checked.ok) throw new Error(`apiKeys ${k.id}: ${checked.error}`);
+        access = checked.value;
+      }
+      const cols = keyAccessToColumns(access);
       db.run(
-        `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, source, telegramUserId, scheduleMode, updatedAt, manualDisabled, forcedModel, temporaryDisabledUntil, createdAt)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, source, telegramUserId, scheduleMode, updatedAt, manualDisabled, forcedModel, temporaryDisabledUntil, createdAt, accessRestricted, accessAllow)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           k.id,
           k.key,
@@ -170,6 +182,8 @@ export async function importDb(payload) {
           k.forcedModel || null,
           k.temporaryDisabledUntil || null,
           k.createdAt || new Date().toISOString(),
+          cols.accessRestricted,
+          cols.accessAllow,
         ]
       );
     }

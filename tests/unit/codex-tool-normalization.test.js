@@ -5,13 +5,13 @@ import { CodexExecutor } from "../../open-sse/executors/codex.js";
 function normalizeTools(tools) {
   const executor = new CodexExecutor();
   const body = {
-    model: "gpt-5.5",
+    model: "gpt-5.6-terra",
     input: [{ type: "message", role: "user", content: [{ type: "input_text", text: "probe" }] }],
     tools,
     stream: true,
   };
 
-  executor.transformRequest("gpt-5.5", body, true, {
+  executor.transformRequest("gpt-5.6-terra", body, true, {
     connectionId: "test-codex-tools",
     providerSpecificData: {},
   });
@@ -42,6 +42,28 @@ describe("CodexExecutor tool normalization", () => {
 
   it("prefers top-level strict=false over nested strict=true", () => {
     expect(normalizeTools([{ type: "function", strict: false, function: { name: "probe", strict: true } }])[0].strict).toBe(false);
+  });
+
+  it("preserves explicit strict flags without changing optional arguments", () => {
+    const parameters = {
+      type: "object",
+      properties: { sessionID: { type: "string" } },
+      required: [],
+    };
+    const tools = normalizeTools([
+      { type: "function", name: "flat_false", strict: false, parameters },
+      { type: "function", name: "flat_true", strict: true, parameters },
+      { type: "function", function: { name: "nested_false", strict: false, parameters } },
+      { type: "function", function: { name: "nested_true", strict: true, parameters } },
+      { type: "function", name: "unspecified", parameters },
+    ]);
+
+    expect(tools.map((tool) => tool.strict)).toEqual([false, true, false, true, undefined]);
+    for (const tool of tools) {
+      expect(tool.parameters).toEqual(parameters);
+      expect(tool.parameters.required).toEqual([]);
+    }
+    expect(tools[4]).not.toHaveProperty("strict");
   });
 
   it("preserves Responses text.format for structured outputs", () => {

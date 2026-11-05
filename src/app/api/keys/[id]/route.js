@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteApiKey, getApiKeyById, updateApiKey } from "@/lib/localDb";
+import { validateKeyAccessInput } from "@/shared/utils/keyAccess.js";
 
 // GET /api/keys/[id] - Get single key
 export async function GET(request, { params }) {
@@ -21,7 +22,7 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { isActive, forcedModel } = body;
+    const { isActive, forcedModel, access } = body;
 
     const existing = await getApiKeyById(id);
     if (!existing) {
@@ -32,6 +33,11 @@ export async function PUT(request, { params }) {
     if (isActive !== undefined) updateData.isActive = isActive;
     if (Object.prototype.hasOwnProperty.call(body, "forcedModel")) {
       updateData.forcedModel = forcedModel;
+    }
+    if (access !== undefined) {
+      const checked = validateKeyAccessInput(access);
+      if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 });
+      updateData.access = checked.value;
     }
 
     const updated = await updateApiKey(id, updateData);

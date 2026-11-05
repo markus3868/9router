@@ -6,6 +6,8 @@ import {
   computeApiKeyIsActive,
 } from "@/lib/apiKeys/schedule.js";
 import { generateApiKeyWithMachine } from "@/shared/utils/apiKey.js";
+import { keyAccessFromColumns, keyAccessToColumns } from "@/shared/utils/keyAccess.js";
+import { KEY_ACCESS_UNRESTRICTED } from "@/shared/constants/keyAccess.js";
 import { getSettings } from "./settingsRepo.js";
 
 function boolFromDb(value) {
@@ -28,6 +30,7 @@ function rowToKey(row) {
     forcedModel: row.forcedModel || null,
     temporaryDisabledUntil: row.temporaryDisabledUntil || null,
     createdAt: row.createdAt,
+    access: keyAccessFromColumns(row.accessRestricted, row.accessAllow),
   };
 }
 
@@ -50,15 +53,17 @@ function normalizeKeyRecord(data, now = new Date(), options = {}) {
       : null,
     createdAt: data.createdAt || nowIso,
     updatedAt: nowIso,
+    access: data.access || KEY_ACCESS_UNRESTRICTED,
   };
   normalized.isActive = computeApiKeyIsActive(normalized, now, options);
   return normalized;
 }
 
 function persistKey(db, key) {
+  const cols = keyAccessToColumns(key.access);
   db.run(
-    `INSERT INTO apiKeys(id, key, name, machineId, isActive, source, telegramUserId, scheduleMode, updatedAt, manualDisabled, forcedModel, temporaryDisabledUntil, createdAt)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO apiKeys(id, key, name, machineId, isActive, source, telegramUserId, scheduleMode, updatedAt, manualDisabled, forcedModel, temporaryDisabledUntil, createdAt, accessRestricted, accessAllow)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        key = excluded.key,
        name = excluded.name,
@@ -71,7 +76,9 @@ function persistKey(db, key) {
        manualDisabled = excluded.manualDisabled,
        forcedModel = excluded.forcedModel,
        temporaryDisabledUntil = excluded.temporaryDisabledUntil,
-       createdAt = excluded.createdAt`,
+       createdAt = excluded.createdAt,
+       accessRestricted = excluded.accessRestricted,
+       accessAllow = excluded.accessAllow`,
     [
       key.id,
       key.key,
@@ -86,6 +93,8 @@ function persistKey(db, key) {
       key.forcedModel,
       key.temporaryDisabledUntil,
       key.createdAt,
+      cols.accessRestricted,
+      cols.accessAllow,
     ]
   );
 }
@@ -111,7 +120,9 @@ export async function getApiKeyById(id) {
   return rowToKey(row);
 }
 
+// Used by the /v1 handlers to read the presented key's access settings.
 export async function getApiKeyByKey(key) {
+  if (!key) return null;
   const db = await getAdapter();
   const row = db.get(`SELECT * FROM apiKeys WHERE key = ?`, [key]);
   return rowToKey(row);
