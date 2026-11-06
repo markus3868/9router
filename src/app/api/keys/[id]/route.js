@@ -45,7 +45,10 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ key: updated });
   } catch (error) {
     console.log("Error updating key:", error);
-    return NextResponse.json({ error: "Failed to update key" }, { status: 500 });
+    return NextResponse.json(
+      { error: error.status === 409 ? error.message : "Failed to update key" },
+      { status: error.status === 409 ? 409 : 500 }
+    );
   }
 }
 

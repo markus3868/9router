@@ -1,5 +1,6 @@
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
+import { assertTelegramConfigWritable, getSharedTelegramSettings } from "@/lib/apiKeys/sharedConfig.js";
 
 const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
 const DEFAULT_HEADROOM_URL = process.env.HEADROOM_URL || "http://localhost:8787";
@@ -107,12 +108,15 @@ export function mergeWithDefaults(raw) {
 
 export async function getSettings() {
   const raw = await readRaw();
-  return mergeWithDefaults(raw);
+  return mergeWithDefaults({ ...raw, ...await getSharedTelegramSettings() });
 }
 
 // Atomic read-merge-write inside transaction (prevents losing concurrent updates)
 export async function updateSettings(updates) {
   const db = await getAdapter();
+  if (Object.prototype.hasOwnProperty.call(updates, "telegramWorkingHoursEnabled")) {
+    assertTelegramConfigWritable();
+  }
   let next;
   db.transaction(function () {
     const row = db.get(`SELECT data FROM settings WHERE id = 1`);
@@ -123,7 +127,7 @@ export async function updateSettings(updates) {
       [stringifyJson(next)],
     );
   });
-  return mergeWithDefaults(next);
+  return mergeWithDefaults({ ...next, ...await getSharedTelegramSettings() });
 }
 
 export async function isCloudEnabled() {

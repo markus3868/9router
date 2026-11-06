@@ -428,7 +428,7 @@ describe("DB SQLite layer — public API parity", () => {
       await sqliteDb.saveRequestUsage({
         timestamp: "2026-05-18T03:00:00.000Z",
         provider: "openai",
-        model: "gpt-4",
+        model: "gpt-4-old",
         apiKey: telegramA.key,
         tokens: { prompt_tokens: 50, completion_tokens: 50 },
         status: "ok",
@@ -479,14 +479,17 @@ describe("DB SQLite layer — public API parity", () => {
       expect(todaySummary.keysWithUsage).toBe(2);
       expect(todaySummary.items[0].name).toBe("bob");
       expect(todaySummary.items[0].totalTokens).toBe(300);
+      expect(todaySummary.items[0].models).toEqual(["openai/gpt-4"]);
       expect(todaySummary.items[1].name).toBe("alice");
       expect(todaySummary.items[1].totalTokens).toBe(150);
+      expect(todaySummary.items[1].models).toEqual(["openai/gpt-4"]);
 
       const weekSummary = await sqliteDb.getTelegramUsageShareSummary("7d", now);
       expect(weekSummary.totalTokens).toBe(1550);
       expect(weekSummary.keysWithUsage).toBe(2);
       expect(weekSummary.items[0].name).toBe("alice");
       expect(weekSummary.items[0].totalTokens).toBe(1250);
+      expect(weekSummary.items[0].models).toEqual(["openai/gpt-4", "openai/gpt-4-old"]);
       expect(weekSummary.items[1].name).toBe("bob");
     } finally {
       vi.useRealTimers();

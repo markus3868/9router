@@ -1,4 +1,5 @@
-import { getProviderConnections, getTelegramUsageShareSummary } from "@/lib/localDb";
+import { getProviderConnections } from "@/lib/localDb";
+import { getTelegramReportUsageSummary } from "./reportUsage.js";
 import {
   getVietnamStartOfDay,
   isVietnamBusinessWeekday,
@@ -264,6 +265,12 @@ function buildQuotaLine(snapshot) {
 
 function buildUsageLines(summary) {
   const lines = [`<b>Key usage (${escapeHtml(summary.period)})</b>:`];
+  if (summary.sourceCount) {
+    lines.push(`T\u1ed5ng h\u1ee3p ${summary.sourceCount} instance.`);
+  }
+  if (summary.unavailableSources) {
+    lines.push(`L\u01b0u \u00fd: ${summary.unavailableSources} ngu\u1ed3n ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c, s\u1ed1 li\u1ec7u ch\u01b0a \u0111\u1ea7y \u0111\u1ee7.`);
+  }
 
   if (!summary.items.length) {
     lines.push("No Telegram-key usage.");
@@ -272,7 +279,8 @@ function buildUsageLines(summary) {
 
   for (const item of summary.items) {
     const name = escapeHtml(item.name || item.telegramUserId || "unknown");
-    lines.push(`${name}: ${formatInteger(item.totalTokens)} tokens - ${formatSharePercentage(item.share)} - ${formatUsd(item.cost)}`);
+    const models = escapeHtml(item.models?.join(", ") || "unknown");
+    lines.push(`${name}: ${formatInteger(item.totalTokens)} tokens - ${models}`);
   }
 
   return lines;
@@ -281,7 +289,7 @@ function buildUsageLines(summary) {
 export async function buildTelegramReport(period = "today", now = new Date()) {
   const [quotaSnapshot, usageSummary] = await Promise.all([
     getQuotaSnapshot(now),
-    getTelegramUsageShareSummary(period, now),
+    getTelegramReportUsageSummary(period, now),
   ]);
 
   return [

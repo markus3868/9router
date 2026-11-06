@@ -9,6 +9,7 @@ import {
   getVietnamStartOfDay,
 } from "@/lib/apiKeys/schedule.js";
 import { enforceTelegramDailyUsageLimits } from "@/lib/telegram/usageLimits.js";
+import { getProviderAlias } from "@/shared/constants/providers.js";
 
 function maskApiKey(key) {
   if (!key || typeof key !== "string") return null;
@@ -405,7 +406,7 @@ export async function getTelegramUsageShareSummary(period = "today", now = new D
 
   const keyMap = new Map(telegramKeys.map((key) => [key.key, key]));
   const rows = db.all(
-    `SELECT timestamp, apiKey, promptTokens, completionTokens, cost, tokens
+    `SELECT timestamp, apiKey, provider, model, promptTokens, completionTokens, cost, tokens
      FROM usageHistory
      WHERE timestamp >= ? AND timestamp <= ? AND apiKey IS NOT NULL`,
     [window.start.toISOString(), window.end.toISOString()]
@@ -438,8 +439,13 @@ export async function getTelegramUsageShareSummary(period = "today", now = new D
       totalTokens: 0,
       requests: 0,
       lastUsed: row.timestamp,
+      models: new Set(),
     };
 
+    if (row.model) {
+      const alias = getProviderAlias(row.provider);
+      existing.models.add(alias && !row.model.startsWith(`${alias}/`) ? `${alias}/${row.model}` : row.model);
+    }
     existing.cost += row.cost || 0;
     existing.promptTokens += promptTokens;
     existing.completionTokens += completionTokens;
@@ -460,6 +466,7 @@ export async function getTelegramUsageShareSummary(period = "today", now = new D
     ))
     .map((item) => ({
       ...item,
+      models: [...item.models].sort(),
       share: totalTokens > 0 ? item.totalTokens / totalTokens : 0,
     }));
 

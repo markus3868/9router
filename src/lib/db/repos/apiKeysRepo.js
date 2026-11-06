@@ -9,6 +9,7 @@ import { generateApiKeyWithMachine } from "@/shared/utils/apiKey.js";
 import { keyAccessFromColumns, keyAccessToColumns } from "@/shared/utils/keyAccess.js";
 import { KEY_ACCESS_UNRESTRICTED } from "@/shared/constants/keyAccess.js";
 import { getSettings } from "./settingsRepo.js";
+import { applySharedTelegramConfig, assertTelegramConfigWritable } from "@/lib/apiKeys/sharedConfig.js";
 
 function boolFromDb(value) {
   return value === 1 || value === true;
@@ -111,13 +112,13 @@ function normalizePatch(existing, data = {}) {
 export async function getApiKeys() {
   const db = await getAdapter();
   const rows = db.all(`SELECT * FROM apiKeys ORDER BY createdAt ASC`);
-  return rows.map(rowToKey);
+  return applySharedTelegramConfig(rows.map(rowToKey));
 }
 
 export async function getApiKeyById(id) {
   const db = await getAdapter();
   const row = db.get(`SELECT * FROM apiKeys WHERE id = ?`, [id]);
-  return rowToKey(row);
+  return (await applySharedTelegramConfig([rowToKey(row)]))[0];
 }
 
 // Used by the /v1 handlers to read the presented key's access settings.
@@ -125,13 +126,13 @@ export async function getApiKeyByKey(key) {
   if (!key) return null;
   const db = await getAdapter();
   const row = db.get(`SELECT * FROM apiKeys WHERE key = ?`, [key]);
-  return rowToKey(row);
+  return (await applySharedTelegramConfig([rowToKey(row)]))[0];
 }
 
 export async function getApiKeyByTelegramUserId(telegramUserId) {
   const db = await getAdapter();
   const row = db.get(`SELECT * FROM apiKeys WHERE telegramUserId = ?`, [String(telegramUserId)]);
-  return rowToKey(row);
+  return (await applySharedTelegramConfig([rowToKey(row)]))[0];
 }
 
 export async function createApiKey(name, machineId, options = {}) {
@@ -210,12 +211,15 @@ export async function updateApiKey(id, data) {
   db.transaction(() => {
     const row = db.get(`SELECT * FROM apiKeys WHERE id = ?`, [id]);
     if (!row) return;
+    if (row.source === API_KEY_SOURCES.TELEGRAM && Object.prototype.hasOwnProperty.call(data, "forcedModel")) {
+      assertTelegramConfigWritable();
+    }
     const merged = normalizePatch(rowToKey(row), data);
     result = normalizeKeyRecord(merged, now, scheduleOptions);
     persistKey(db, result);
   });
 
-  return result;
+  return (await applySharedTelegramConfig([result], now))[0];
 }
 
 export async function deleteApiKey(id) {
@@ -265,13 +269,14 @@ export async function resolveValidatedApiKey(key) {
   const row = db.get(`SELECT * FROM apiKeys WHERE key = ?`, [key]);
   if (!row) return null;
 
-  const normalized = rowToKey(row);
+  const [normalized] = await applySharedTelegramConfig([rowToKey(row)]);
+  const persistedActive = boolFromDb(row.isActive);
   const now = new Date();
   const settings = await getSettings();
   const desired = computeApiKeyIsActive(normalized, now, {
     workingHoursEnabled: settings.telegramWorkingHoursEnabled !== false,
   });
-  if (desired !== normalized.isActive) {
+  if (desired !== persistedActive) {
     db.run(`UPDATE apiKeys SET isActive = ?, updatedAt = ? WHERE id = ?`, [
       desired ? 1 : 0,
       now.toISOString(),
@@ -282,6 +287,6 @@ export async function resolveValidatedApiKey(key) {
   return {
     ...normalized,
     isActive: desired,
-    updatedAt: desired !== normalized.isActive ? now.toISOString() : normalized.updatedAt,
+    updatedAt: desired !== persistedActive ? now.toISOString() : normalized.updatedAt,
   };
 }

@@ -61,6 +61,7 @@ describe("telegram report builder", () => {
         telegramUserId: String(index + 1),
         totalTokens: index === 0 ? 300 : 70,
         share: index === 0 ? 0.3 : 0.07,
+        models: index === 0 ? ["cx/gpt-5.4", "ds/deepseek-v4-flash"] : ["cx/gpt-5.4-mini"],
       })),
     });
   });
@@ -73,8 +74,10 @@ describe("telegram report builder", () => {
     expect(report).toContain("- github / alice@example.com: 5%");
     expect(report).toContain("- codex / Workspace A: 50%");
     expect(report).toContain("<b>Key usage (Today)</b>:");
-    expect(report).toContain("user1: 300 tokens - 30.0% - 3.14$");
-    expect(report).toContain("user11: 70 tokens - 7.0% - 0.1234$");
+    expect(report).toContain("user1: 300 tokens - cx/gpt-5.4, ds/deepseek-v4-flash");
+    expect(report).toContain("user11: 70 tokens - cx/gpt-5.4-mini");
+    expect(report).not.toContain("$");
+    expect(report).not.toContain("Model:");
     expect(report).not.toContain("As of:");
     expect(report).not.toContain("Window:");
   });
@@ -146,6 +149,44 @@ describe("telegram report builder", () => {
         { remaining: 57, quotaName: "weekly", resetIn: "4d 15h 7m" },
       ],
     })).toBe("<b>Quota Remaining Today</b>: 57% (weekly, reset 4d 15h 7m)");
+  });
+
+  it("marks aggregated and incomplete usage without exposing source paths", async () => {
+    const { __test__ } = await loadReportModule();
+    const text = __test__.buildUsageLines({
+      period: "Today", sourceCount: 4, unavailableSources: 1, items: [],
+    }).join("\n");
+    expect(text).toContain("Tổng hợp 4 instance.");
+    expect(text).toContain("1 nguồn chưa đọc được");
+    expect(text).toContain("số liệu chưa đầy đủ");
+  });
+
+  it("escapes model labels and handles history without model metadata", async () => {
+    const { __test__ } = await loadReportModule();
+    const text = __test__.buildUsageLines({
+      period: "Today",
+      items: [
+        { name: "<alice>", totalTokens: 1, share: 0.5, models: ["cx/<model>&test"] },
+        { name: "bob", totalTokens: 1, share: 0.5 },
+      ],
+    }).join("\n");
+    expect(text).toContain("&lt;alice&gt;: 1 tokens - cx/&lt;model&gt;&amp;test");
+    expect(text).toContain("bob: 1 tokens - unknown");
+    expect(text).not.toContain("<model>");
+  });
+
+  it.each(["Today", "7D"])("shows only tokens and models per user for %s", async (period) => {
+    const { __test__ } = await loadReportModule();
+    expect(__test__.buildUsageLines({
+      period,
+      items: [{
+        name: "nhatanhdh", totalTokens: 181192408, share: 0.218, cost: 2.52,
+        models: ["cx/gpt-6-luna"],
+      }],
+    })).toEqual([
+      `<b>Key usage (${period})</b>:`,
+      "nhatanhdh: 181,192,408 tokens - cx/gpt-6-luna",
+    ]);
   });
 
   it("adjusts weekly quota by remaining workday budget and buffer", async () => {

@@ -1,6 +1,6 @@
 # Deployment Guide
 
-_Last updated: 2026-10-02_
+_Last updated: 2026-11-05_
 
 ## Runtime Summary
 
@@ -143,6 +143,40 @@ Notes:
 - Provider thinking settings are defaults only: explicit client reasoning (including Responses `reasoning.effort`) takes priority. Codex normalizes unsupported efforts to the target model's supported levels; forcing an API key's model does not change the client's advertised effort options.
 - `/key` still requires the sender to have a Telegram `username`; `/report` and `/report7` do not
 - Telegram clients that support bot command menus will show `/key`, `/report`, and `/report7` from the native slash-command menu
+
+## Telegram Reports Across Local Instances
+
+For independent instances on the same host, set this only on the instance polling the bot:
+
+```bash
+TELEGRAM_REPORT_DATA_DIRS=/home/ubuntu/.9router-20125,/home/ubuntu/.9router-20126,/home/ubuntu/.9router-20127,/home/ubuntu/.9router-20129
+```
+
+- Requires Node.js 22.13+ with `node:sqlite` and read access to each peer's `db/data.sqlite` and SQLite WAL files.
+- The bot includes its own `DATA_DIR` automatically. Duplicate paths and symlinks are counted once.
+- `/report` and `/report7` combine tokens, cost, requests, and percentages by Telegram user ID, using Vietnam calendar-day windows.
+- Each user row uses `username: 123,456 tokens - cx/model`, listing the distinct models actually used in that report window (across all configured instances), not the key's currently configured forced model. Usage percentages and costs are not displayed.
+- Identical cloned history rows are counted once across databases; independent requests remain separate.
+- Quota remains the polling instance's current upstream snapshot, not the sum of duplicate account quotas.
+- Missing/unreadable sources produce an incomplete-data notice in the report.
+- DBs, API keys, and daily usage-limit enforcement remain independent. This setting aggregates reports only.
+- Keep `TELEGRAM_BOT_DISABLED=1` on peer instances. Local development can keep `TELEGRAM_DISABLED=1` and omit the report setting.
+
+## Shared Telegram Configuration
+
+On peers (20125, 20126, 20127, 20129), set:
+
+```bash
+TELEGRAM_CONFIG_SOURCE_DATA_DIR=/home/ubuntu/.9router
+```
+
+- Change Telegram users' forced models and `Enable Use Working Hour` on the primary dashboard (20128).
+- Peers read these values directly from the primary SQLite database in read-only mode; the next request sees committed changes without restarting.
+- Requires same-host Node.js 22.13+ and read access to the primary database and WAL files. An unavailable source fails requests rather than silently using stale permissions.
+- Model overrides match Telegram user IDs, not usernames or local key IDs. Clearing a model on the primary also clears the effective override on peers.
+- Peer dashboards show effective values. Conflicting model/working-hour edits on peers return HTTP 409 and direct the user to the primary.
+- Manual keys, other settings, usage history, manual/temporary disables, and daily limits remain local. No keys or usage records are copied or created.
+- Omit this setting for independent/local instances. Pointing it at the instance's own data directory has no effect.
 
 ## Recommended Deployment Checks
 
