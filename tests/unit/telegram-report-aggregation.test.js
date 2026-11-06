@@ -12,6 +12,9 @@ vi.mock("@/lib/db/paths.js", () => ({ get DATA_FILE() { return mocks.dataFile; }
 vi.mock("@/lib/localDb", () => ({
   getTelegramUsageShareSummary: mocks.getTelegramUsageShareSummary,
 }));
+vi.mock("@/lib/db/driver.js", () => ({
+  openReadOnlyDatabase: async (file) => new DatabaseSync(file, { readOnly: true }),
+}));
 
 let root;
 const now = new Date("2026-11-05T06:00:00.000Z");

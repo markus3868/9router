@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import path from "node:path";
 import { DATA_FILE } from "@/lib/db/paths.js";
+import { openReadOnlyDatabase } from "@/lib/db/driver.js";
 import { getTelegramUsageShareSummary } from "@/lib/localDb";
 import { getProviderAlias } from "@/shared/constants/providers.js";
 import {
@@ -16,7 +17,6 @@ export async function getTelegramReportUsageSummary(period = "today", now = new 
     .split(",").map((dir) => dir.trim()).filter(Boolean);
   if (!peers.length) return getTelegramUsageShareSummary(period, now);
 
-  const { DatabaseSync } = await import("node:sqlite");
   const start = getVietnamStartOfDay(now, period === "7d" ? 6 : 0);
   const startIso = start.toISOString();
   const endIso = now.toISOString();
@@ -37,7 +37,7 @@ export async function getTelegramReportUsageSummary(period = "today", now = new 
       const canonical = realpathSync(file);
       if (visited.has(canonical)) continue;
       visited.add(canonical);
-      db = new DatabaseSync(canonical, { readOnly: true });
+      db = await openReadOnlyDatabase(canonical);
       db.exec("PRAGMA busy_timeout = 1000; BEGIN");
       keys = db.prepare(
         "SELECT key, name, telegramUserId, updatedAt FROM apiKeys WHERE source = 'telegram'"

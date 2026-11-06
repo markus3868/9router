@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import path from "node:path";
 import { DATA_FILE } from "@/lib/db/paths.js";
+import { openReadOnlyDatabase } from "@/lib/db/driver.js";
 import { computeApiKeyIsActive } from "./schedule.js";
 
 function getSourceFile() {
@@ -17,12 +18,11 @@ export function assertTelegramConfigWritable() {
   throw error;
 }
 
-// ponytail: same-host Node SQLite only; remote hosts need an authenticated config service.
+// ponytail: same-host native SQLite only; remote hosts need an authenticated config service.
 async function readConfig() {
   const file = getSourceFile();
   if (!file) return null;
-  const { DatabaseSync } = await import("node:sqlite");
-  const db = new DatabaseSync(file, { readOnly: true });
+  const db = await openReadOnlyDatabase(file);
   try {
     db.exec("PRAGMA busy_timeout = 250; BEGIN");
     const row = db.prepare("SELECT data FROM settings WHERE id = 1").get();

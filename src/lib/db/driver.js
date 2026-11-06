@@ -114,3 +114,14 @@ export function getAdapterSync() {
   if (!state.instance) throw new Error("[DB] adapter not initialized — await getAdapter() first");
   return state.instance;
 }
+
+export async function openReadOnlyDatabase(filePath) {
+  const { driver, raw } = await getAdapter();
+  if (!["better-sqlite3", "node:sqlite", "bun:sqlite"].includes(driver)) {
+    throw new Error("Cross-instance reads require a native SQLite driver");
+  }
+  // Mixing SQLite libraries on one file can release another connection's POSIX locks.
+  return new raw.constructor(filePath, driver === "node:sqlite"
+    ? { readOnly: true }
+    : { readonly: true, fileMustExist: true });
+}
