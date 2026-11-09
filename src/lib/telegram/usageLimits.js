@@ -13,8 +13,8 @@ import { TELEGRAM_API_BASE_URL, isTelegramDisabled } from "./config.js";
 
 const WARNING_COST_USD = 400;
 const WARNING_TOKENS = 180_000_000;
-const HARD_COST_USD = 700;
-const HARD_TOKENS = 300_000_000;
+const HARD_COST_USD = 1000;
+const HARD_TOKENS = 600_000_000;
 const KV_SCOPE = "telegramUsageLimits";
 const MANUAL_CLEAR_EXTRA_COST_USD = HARD_COST_USD;
 const MANUAL_CLEAR_EXTRA_TOKENS = HARD_TOKENS;
