@@ -4,6 +4,7 @@ import { USAGE_APIKEY_PROVIDERS, USAGE_SUPPORTED_PROVIDERS } from "@/shared/cons
 import { getUsageForProvider } from "open-sse/services/usage.js";
 import { isUnrecoverableRefreshError } from "open-sse/services/tokenRefresh.js";
 import { getExecutor } from "open-sse/executors/index.js";
+import { isLeaseConnection } from "open-sse/services/minimaxCodeLease.js";
 
 const AUTH_EXPIRED_PATTERNS = ["expired", "authentication", "unauthorized", "401", "re-authorize"];
 
@@ -17,8 +18,10 @@ export function isUsageEligibleConnection(connection) {
   if (!connection) return false;
   const isOAuth = connection.authType === "oauth";
   const isApikeyAuth = connection.authType === "apikey" || connection.authType === "api_key";
+  // Lease connections borrow the desktop app's token inside the usage handler.
+  const isLease = isLeaseConnection(connection);
   return USAGE_SUPPORTED_PROVIDERS.includes(connection.provider) && (
-    isOAuth || (isApikeyAuth && USAGE_APIKEY_PROVIDERS.includes(connection.provider))
+    isOAuth || isLease || (isApikeyAuth && USAGE_APIKEY_PROVIDERS.includes(connection.provider))
   );
 }
 

@@ -4,6 +4,7 @@ import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { AI_MODELS } from "@/shared/constants/config";
 import { getProviderAlias, ALIAS_TO_ID } from "@/shared/constants/providers";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
 
 // GET /api/models - Get models with aliases
 export async function GET() {
@@ -47,6 +48,7 @@ export async function GET() {
         ...(caps || {}),
       };
 
+      const thinkingLevels = getThinkingLevels(providerId, modelId);
       modelsByFullModel.set(routedModel, {
         provider: rawProvider,
         model: modelId,
@@ -55,6 +57,7 @@ export async function GET() {
         fullModel,
         routedModel,
         alias: aliasByFullModel[routedModel] || modelId,
+        ...(Array.isArray(thinkingLevels) && thinkingLevels.length > 0 ? { thinking_levels: thinkingLevels } : {}),
         caps: {
           vision: capabilities.vision,
           search: capabilities.search,
